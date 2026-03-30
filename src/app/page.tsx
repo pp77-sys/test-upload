@@ -1,4 +1,4 @@
-"use client";
+'use client'
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 
