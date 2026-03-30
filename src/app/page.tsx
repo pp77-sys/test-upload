@@ -1,115 +1,98 @@
 'use client'
+import { useState, useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { Camera, Upload, Loader2 } from 'lucide-react';
 
-import React, { useState, useRef, ChangeEvent } from 'react';
-import { Camera, Upload, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+// Khởi tạo Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-// Định nghĩa kiểu dữ liệu cho hình ảnh
-interface ImageFile {
-  file: File;
-  preview: string;
-}
-
-const PatientUpload = () => {
-  const [selectedImages, setSelectedImages] = useState<ImageFile[]>([]);
-  const [uploading, setUploading] = useState<boolean>(false);
+export default function PatientUpload() {
+  const [name, setName] = useState("");
+  const [selectedImages, setSelectedImages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sửa lỗi ở đây: Thêm kiểu dữ liệu ChangeEvent cho tham số 'e'
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      
-      if (files.length + selectedImages.length > 4) {
-        alert("Bạn chỉ được upload tối đa 4 hình ảnh.");
-        return;
-      }
-
-      const newImages: ImageFile[] = files.map(file => ({
-        file,
-        preview: URL.createObjectURL(file)
-      }));
-
-      setSelectedImages(prev => [...prev, ...newImages]);
-    }
+  const handleFile = (e: any) => {
+    const files = Array.from(e.target.files || []);
+    const newImgs = files.map(file => ({ file, preview: URL.createObjectURL(file as File) }));
+    setSelectedImages([...selectedImages, ...newImgs]);
   };
 
   const handleUpload = async () => {
-    setUploading(true);
-    // Giả lập gửi dữ liệu
-    setTimeout(() => {
-      setUploading(false);
-      alert("Đã gửi thông tin thành công!");
-      setSelectedImages([]);
-    }, 2000);
-  };
+    if (!name || selectedImages.length === 0) return alert("Vui lòng nhập tên và chọn ảnh");
+    setLoading(true);
 
-  const removeImage = (index: number) => {
-    const newImages = [...selectedImages];
-    URL.revokeObjectURL(newImages[index].preview); // Xóa bộ nhớ đệm preview
-    newImages.splice(index, 1);
-    setSelectedImages(newImages);
+    try {
+      // 1. Tạo bản ghi bệnh nhân
+      const { data: patient, error: pError } = await supabase
+        .from('patients')
+        .insert([{ full_name: name }])
+        .select()
+        .single();
+
+      if (pError) throw pError;
+
+      // 2. Upload từng ảnh lên Storage và lưu link vào DB
+      for (const img of selectedImages) {
+        const fileName = `${patient.id}/${Date.now()}-${img.file.name}`;
+        const { data: uploadData, error: uError } = await supabase.storage
+          .from('patient-photos')
+          .upload(fileName, img.file);
+
+        if (uError) throw uError;
+
+        const { data: { publicUrl } } = supabase.storage.from('patient-photos').getPublicUrl(fileName);
+
+        await supabase.from('patient_images').insert([
+          { patient_id: patient.id, image_url: publicUrl }
+        ]);
+      }
+
+      alert("Gửi hồ sơ thành công!");
+      setName(""); setSelectedImages([]);
+    } catch (error) {
+      console.error(error);
+      alert("Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white shadow-lg rounded-xl mt-10 font-sans">
-      <h1 className="text-2xl font-bold text-blue-700 mb-2">Gửi hồ sơ bệnh nhân</h1>
-      <p className="text-gray-500 mb-6 text-sm">Vui lòng cung cấp khoảng 4 hình ảnh rõ nét.</p>
+    <div className="max-w-md mx-auto p-6 space-y-4">
+      <h1 className="text-xl font-bold text-center">Hệ thống thu thập dữ liệu</h1>
+      
+      <input 
+        className="w-full p-2 border rounded" 
+        placeholder="Họ tên bệnh nhân"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <button 
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-        >
-          <Camera className="w-8 h-8 text-blue-600 mb-2" />
-          <span className="text-sm font-medium">Chụp hình</span>
-        </button>
-
-        <button 
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <Upload className="w-8 h-8 text-gray-600 mb-2" />
-          <span className="text-sm font-medium">Chọn từ máy</span>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => fileInputRef.current?.click()} className="p-4 border-2 border-dashed flex flex-col items-center">
+          <Camera /> <span>Chụp/Chọn ảnh</span>
         </button>
       </div>
 
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept="image/*"
-        capture="environment"
-        multiple
-        className="hidden"
-      />
+      <input type="file" ref={fileInputRef} hidden onChange={handleFile} multiple accept="image/*" capture="environment" />
 
-      <div className="grid grid-cols-2 gap-2 mb-6">
-        {selectedImages.map((img, index) => (
-          <div key={index} className="relative aspect-square rounded-md overflow-hidden bg-gray-100 group">
-            <img src={img.preview} alt="preview" className="w-full h-full object-cover" />
-            <button 
-              onClick={() => removeImage(index)}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
-            >
-              ×
-            </button>
-          </div>
+      <div className="grid grid-cols-2 gap-2">
+        {selectedImages.map((img, i) => (
+          <img key={i} src={img.preview} className="h-24 w-full object-cover rounded" />
         ))}
       </div>
 
       <button 
-        disabled={selectedImages.length === 0 || uploading}
-        onClick={handleUpload}
-        className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
-          selectedImages.length > 0 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'
-        }`}
+        onClick={handleUpload} 
+        disabled={loading}
+        className="w-full bg-blue-600 text-white p-3 rounded font-bold flex justify-center"
       >
-        {uploading ? "Đang gửi..." : "Hoàn tất và gửi"}
+        {loading ? <Loader2 className="animate-spin" /> : "GỬI HỒ SƠ"}
       </button>
     </div>
   );
-};
-
-export default PatientUpload;
+}
