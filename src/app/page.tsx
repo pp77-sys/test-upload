@@ -54,8 +54,12 @@ export default function PatientUpload() {
       alert("Gửi hồ sơ thành công!");
       setName(""); setSelectedImages([]);
     } catch (error) {
-      alert("Lỗi cụ thể: " + error.message);
-	  console.log("Full error details:", error);
+      if (error instanceof Error) {
+		alert("Lỗi cụ thể: " + error.message);
+	  } else {
+		alert("Đã xảy ra lỗi không xác định");
+	  }
+  console.log("Full error details:", error);
     } finally {
       setLoading(false);
     }
