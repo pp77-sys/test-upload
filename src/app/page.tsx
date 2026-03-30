@@ -54,8 +54,8 @@ export default function PatientUpload() {
       alert("Gửi hồ sơ thành công!");
       setName(""); setSelectedImages([]);
     } catch (error) {
-      console.error(error);
-      alert("Có lỗi xảy ra, vui lòng thử lại");
+      alert("Lỗi cụ thể: " + error.message);
+	  console.log("Full error details:", error);
     } finally {
       setLoading(false);
     }
