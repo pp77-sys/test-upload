@@ -53,13 +53,33 @@ export default function PatientApp() {
 
   // Tự động đăng nhập
   useEffect(() => {
-    const p = localStorage.getItem('p_phone');
-    const b = localStorage.getItem('p_birth');
-    if (p && b) {
-      supabase.from('patients').select('*').eq('phone_number', p).eq('birth_year', b).single()
-      .then(({data}) => { if(data) { setPatientData(data); setIsVerified(true); } })
-      .finally(() => setAuthLoading(false));
-    } else { setAuthLoading(false); }
+    const autoLogin = async () => {
+      const p = localStorage.getItem('p_phone');
+      const b = localStorage.getItem('p_birth');
+
+      if (p && b) {
+        try {
+          const { data } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('phone_number', p)
+            .eq('birth_year', b)
+            .single();
+
+          if (data) {
+            setPatientData(data);
+            setIsVerified(true);
+          }
+        } catch (err) {
+          console.error("Lỗi tự động đăng nhập:", err);
+        }
+      }
+      
+      // Tương đương với .finally() - Luôn chạy dù thành công hay thất bại
+      setAuthLoading(false);
+    };
+
+    autoLogin();
   }, []);
 
   // Xử lý chọn hình
